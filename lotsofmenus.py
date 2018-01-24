@@ -19,8 +19,7 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 
-
-#Menu for UrbanBurger
+# Menu for UrbanBurger
 restaurant1 = Restaurant(name = "Urban Burger")
 
 session.add(restaurant1)
@@ -292,5 +291,5 @@ menuItem2 = MenuItem(name = "Cachapa", description = "Golden brown, corn-based v
 session.add(menuItem2)
 session.commit()
 
-print "added menu items!"
+print("added menu items!")
 
