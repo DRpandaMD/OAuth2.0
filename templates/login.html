@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!--Adding pre-reqs for google sign in -->
+    <!-- NOTE: I found these by google searching for them -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://apis.google.com/js/platform.js?onload=start" async defer></script>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <div id="signinButton">
+        <span class="g-signin"
+            data-scope="openid email"
+            data-clientid="{{ cfg.google_api_keys['client_id'] }}"
+            data-redirecturi="postmessage"
+            data-accesstype="offline"
+            data-cookiepolicy="single_host_origin"
+            data-callback="signInCallback"
+            data-approvalpromt="force">
+        </span>
+    </div>
+
+</body>
+</html>

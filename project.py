@@ -1,10 +1,16 @@
 # All edits from the original from the initial fork have been done by:
 # Michael Zarate
 
-from flask import Flask, render_template, request, redirect,jsonify, url_for, flash
+from flask import Flask, render_template, request, redirect, jsonify, url_for, flash
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import sessionmaker
 from database_setup import Base, Restaurant, MenuItem
+
+import app_config as cfg
+
+# New Import block for client sessions and Auth
+from flask import session as login_session
+import random, string
 
 app = Flask(__name__)
 
@@ -16,18 +22,32 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 
+def get_config_data(keys):
+    return keys.google_api_keys
+
+
+# Create a state token to prevent request forgery.
+# We will store in the session for later validation
+@app.route('/login')
+def show_login(cfg):
+    state = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(32))
+    login_session['state'] = state
+    return render_template('login.html', cfg=cfg)
+
+
 # JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
 def restaurantMenuJSON(restaurant_id):
-    restaurant = session.query(Restaurant).filter_by(id = restaurant_id).one()
-    items = session.query(MenuItem).filter_by(restaurant_id = restaurant_id).all()
+    restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+    items = session.query(MenuItem).filter_by(restaurant_id=restaurant_id).all()
     return jsonify(MenuItems=[i.serialize for i in items])
 
 
 @app.route('/restaurant/<int:restaurant_id>/menu/<int:menu_id>/JSON')
 def menuItemJSON(restaurant_id, menu_id):
-    Menu_Item = session.query(MenuItem).filter_by(id = menu_id).one()
-    return jsonify(Menu_Item = Menu_Item.serialize)
+    Menu_Item = session.query(MenuItem).filter_by(id=menu_id).one()
+    return jsonify(Menu_Item=Menu_Item.serialize)
+
 
 @app.route('/restaurant/JSON')
 def restaurantsJSON():
@@ -46,26 +66,27 @@ def showRestaurants():
 # Create a new restaurant
 @app.route('/restaurant/new/', methods=['GET', 'POST'])
 def newRestaurant():
-  if request.method == 'POST':
-      newRestaurant = Restaurant(name = request.form['name'])
-      session.add(newRestaurant)
-      flash('New Restaurant %s Successfully Created' % newRestaurant.name)
-      session.commit()
-      return redirect(url_for('showRestaurants'))
-  else:
-      return render_template('newRestaurant.html')
+    if request.method == 'POST':
+        newRestaurant = Restaurant(name = request.form['name'])
+        session.add(newRestaurant)
+        flash('New Restaurant %s Successfully Created' % newRestaurant.name)
+        session.commit()
+        return redirect(url_for('showRestaurants'))
+    else:
+        return render_template('newRestaurant.html')
+
 
 # Edit a restaurant
 @app.route('/restaurant/<int:restaurant_id>/edit/', methods = ['GET', 'POST'])
 def editRestaurant(restaurant_id):
-  editedRestaurant = session.query(Restaurant).filter_by(id = restaurant_id).one()
-  if request.method == 'POST':
-      if request.form['name']:
-        editedRestaurant.name = request.form['name']
-        flash('Restaurant Successfully Edited %s' % editedRestaurant.name)
-        return redirect(url_for('showRestaurants'))
-  else:
-    return render_template('editRestaurant.html', restaurant = editedRestaurant)
+    editedRestaurant = session.query(Restaurant).filter_by(id = restaurant_id).one()
+    if request.method == 'POST':
+        if request.form['name']:
+            editedRestaurant.name = request.form['name']
+            flash('Restaurant Successfully Edited %s' % editedRestaurant.name)
+            return redirect(url_for('showRestaurants'))
+    else:
+        return render_template('editRestaurant.html', restaurant = editedRestaurant)
 
 
 # Delete a restaurant
@@ -123,9 +144,9 @@ def editMenuItem(restaurant_id, menu_id):
         session.add(editedItem)
         session.commit() 
         flash('Menu Item Successfully Edited')
-        return redirect(url_for('showMenu', restaurant_id = restaurant_id))
+        return redirect(url_for('showMenu', restaurant_id=restaurant_id))
     else:
-        return render_template('editmenuitem.html', restaurant_id = restaurant_id, menu_id = menu_id, item = editedItem)
+        return render_template('editmenuitem.html', restaurant_id=restaurant_id, menu_id=menu_id, item=editedItem)
 
 
 # Delete a menu item
@@ -143,6 +164,7 @@ def deleteMenuItem(restaurant_id, menu_id):
 
 
 if __name__ == '__main__':
+    keys = cfg
     app.secret_key = 'super_secret_key'
     app.debug = True
     app.run(host='0.0.0.0', port=9000)
