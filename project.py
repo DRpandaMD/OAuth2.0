@@ -104,7 +104,7 @@ def gconnect():
         return response
 
     # Lets store these for later use
-    login_session[access_token] = credentials.access_token
+    login_session['access_token'] = credentials.access_token
     login_session['google_id'] = google_id
 
     # now lets get the user info
@@ -130,6 +130,51 @@ def gconnect():
     flash("you are now logged in as " + login_session['username'])
     print("Done!")
     return output
+
+
+# Now we need to have the functionality to disconnect effectively logging a user out
+@app.route('/gdisconnect')
+def gdisconnect():
+    # Only disconnect a connected user
+    # credentials = login_session.get('credentials')
+    # if credentials is None:
+    #   response = make_response(json.dumps("Current User not Connected!"), 401)
+    #  response.headers['Content-Type'] = 'application/json'
+    # return response
+    print(login_session)
+    access_token = login_session.get('access_token')
+    # check if to see if that user is connected
+    if access_token is None:
+        print("Access token is none")
+        response = make_response(json.dumps('Current User not connected.'), 401)
+        response.headers['Content-type'] = 'application/json'
+        return response
+    print("in gdisconnect access token is " + access_token)
+    print("User Name is: " + login_session['username'])
+
+    url = 'https://accounts.google.com/o/oauth2/revoke?token=' + login_session['access_token']
+    print(url)
+    http_handler = httplib2.Http()
+    result = http_handler.request(url, 'GET')[0]
+    print("Result is ")
+    print(result)
+
+    # if we get an OK back we need to clear out the login_session
+    if result['status'] == '200':
+        del login_session['access_token']
+        del login_session['google_id']
+        del login_session['username']
+        del login_session['email']
+        del login_session['picture']
+        response = make_response(json.dumps('Successfully disconnected.'), 200)
+        response.headers['Content-type'] = 'application/json'
+        print("done")
+        return response
+    else:
+        response = make_response(json.dumps('Failed to revoke token for given user.'), 400)
+        response.headers['Content-type'] = 'application/json'
+        print("error")
+        return response
 
 
 # JSON APIs to view Restaurant Information
