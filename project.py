@@ -5,12 +5,25 @@ from flask import Flask, render_template, request, redirect, jsonify, url_for, f
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import sessionmaker
 from database_setup import Base, Restaurant, MenuItem
-
+import random
+import string
 import app_config as cfg
 
 # New Import block for client sessions and Auth
 from flask import session as login_session
-import random, string
+# NOTE: oauth2client is deprecated and they recommend using google-auth
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.client import FlowExchangeError
+import httplib2
+import json
+from flask import make_response
+import requests
+
+# END IMPORTS #
+
+# This will allow us to read in the JSON object provided by google
+CLIENT_ID = json.loads(open('client_secrets.json', 'r').read())['web']['client_id']
+
 
 app = Flask(__name__)
 
@@ -22,17 +35,101 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 
-def get_config_data(keys):
-    return keys.google_api_keys
-
-
 # Create a state token to prevent request forgery.
 # We will store in the session for later validation
 @app.route('/login')
-def show_login(cfg):
+def show_login():
     state = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(32))
     login_session['state'] = state
-    return render_template('login.html', cfg=cfg)
+    return render_template('login.html', cfg=cfg, STATE=state)
+
+
+# Here we will do all processing to authenticate with google
+@app.route('/gconnect', methods=['POST'])
+def gconnect():
+    # Validate state token if they are not the same return back with unauthorized
+    if request.args.get('state') != login_session['state']:
+        # send a 401 http message back
+        response = make_response(json.dumps('Invalid state parameter.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+    # get authorization code
+    code = request.data
+
+    try:
+        # we will now take the code and upgrade it into a credentials object
+        oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
+        oauth_flow.redirect_uri = 'postmessage'
+        credentials = oauth_flow.step2_exchange(code)
+    # if there is something wrong throw an error
+    except FlowExchangeError:
+        response = make_response(
+            json.dumps('failed to upgrade the authorization code.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Now we check that the access token is valid against google's api
+    access_token = credentials.access_token
+    url = ('https://googleapis.com/oauth2/v1/tokeninfo?access_token=' + access_token)
+    http_handler = httplib2.Http()
+    # we will make an http GET request from google's api and load that into json
+    result = json.loads((http_handler.request(url, 'GET')[1]).decode())
+    # if there was an error in the access token info, abort out
+    if result.get('error') is not None:
+        response = make_response(json.dumps(result.get('error')), 500)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # now verify access token is used for the intended user
+    google_id = credentials.id_token['sub']
+    if result['user_id'] != google_id:
+        response = make_response(json.dumps("Token's user ID doesn't match given user ID!"), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Verify that the access token is valid for this application.
+    if result['issued_to'] != CLIENT_ID:
+        response = make_response(json.dumps("Token's client ID does not match the app's!!"), 401)
+        print("Token's Client ID does not match app's")
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Now we check if the user has already connected with session
+    # These are a part of the Flask framework globals
+    stored_access_token = login_session.get(access_token)
+    stored_google_id = login_session.get('google_id')
+    if stored_access_token is not None and google_id == stored_google_id:
+        response = make_response(json.dumps('Current User is already connected.'), 200)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Lets store these for later use
+    login_session[access_token] = credentials.access_token
+    login_session['google_id'] = google_id
+
+    # now lets get the user info
+    user_info_uri = "https://googleapis.com/oauth2/v1/userinfo"
+    params = {'access_token': credentials.access_token, 'alt': 'json'}
+    answer = requests.get(user_info_uri, params=params)
+
+    # put the response data into a json object for use to use
+    data = answer.json()
+
+    login_session['username'] = data['name']
+    login_session['picture'] = data['picture']
+    login_session['email'] = data['email']
+
+    # now that we have what we need lets display out what we found
+    output = ''
+    output += '<h1>Welcome, '
+    output += login_session['username']
+    output += '!</h1>'
+    output += '<img src="'
+    output += login_session['picture']
+    output += ' " style = "width: 300px; height: 300px; border-radius: 150px; -webkit-border-radius: 150px; -moz-border-radius: 150px;">'
+    flash("you are now logged in as " + login_session['username'])
+    print("Done!")
+    return output
 
 
 # JSON APIs to view Restaurant Information
@@ -164,7 +261,6 @@ def deleteMenuItem(restaurant_id, menu_id):
 
 
 if __name__ == '__main__':
-    keys = cfg
     app.secret_key = 'super_secret_key'
     app.debug = True
     app.run(host='0.0.0.0', port=9000)

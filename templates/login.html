@@ -20,6 +20,42 @@
             data-approvalpromt="force">
         </span>
     </div>
+    <div id="result">
+
+    </div>
+
+    <!-- Script block -->
+    <script>
+        function signInCallback(authResult){
+            if (authResult['code']) {
+                // Here we want to hide the sign-in button once the user is authorized
+                $('#signinButton').attr('style', 'display: none');
+
+                //Here we want to sent the one time use code to the server, if the server responsds, we want to write
+                // "login successful" message to the user the redirect to the root page of our application
+                $.ajax({
+                    type: 'POST',
+                    url: '/gconnect?state={{ STATE }}',
+                    processData: false,
+                    data: authResult['code'],
+                    contentType: 'application/octet-stream; charset=utf-8',
+                    success: function (result) {
+                        // Handle or verify the server response if necessary.
+                        if (result) {
+                            $('#result').html('Login Successful!!</br>' + result + '</br>Redirecting....')
+                            setTimeout(function(){
+                                window.location.href = "/restaurant";
+                            }, 4000)
+                        } else if (authResult['error']) {
+                            console.log('There was an error: ' + authResult['error']);
+                        } else {
+                            $('#result').html("Failed to make a server-side call. Check your configuration and console for details...");
+                        }
+                    }
+                });
+            }
+        }
+    </script>
 
 </body>
 </html>
