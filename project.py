@@ -70,7 +70,7 @@ def gconnect():
 
     # Now we check that the access token is valid against google's api
     access_token = credentials.access_token
-    url = ('https://googleapis.com/oauth2/v1/tokeninfo?access_token=' + access_token)
+    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + access_token)
     http_handler = httplib2.Http()
     # we will make an http GET request from google's api and load that into json
     result = json.loads((http_handler.request(url, 'GET')[1]).decode())
@@ -108,7 +108,7 @@ def gconnect():
     login_session['google_id'] = google_id
 
     # now lets get the user info
-    user_info_uri = "https://googleapis.com/oauth2/v1/userinfo"
+    user_info_uri = "https://www.googleapis.com/oauth2/v1/userinfo"
     params = {'access_token': credentials.access_token, 'alt': 'json'}
     answer = requests.get(user_info_uri, params=params)
 
