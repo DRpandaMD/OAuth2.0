@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
  
-from database_setup import Restaurant, Base, MenuItem
+from database_setup import Restaurant, Base, MenuItem, User
  
 engine = create_engine('sqlite:///restaurantmenu.db')
 # Bind the engine to the metadata of the Base class so that the
@@ -17,6 +17,13 @@ DBSession = sessionmaker(bind=engine)
 # revert all of them back to the last commit by calling
 # session.rollback()
 session = DBSession()
+
+
+# Set up for a mock user
+User1 = User(name="Ai Robot", email="mrrobot@skynet.net",
+             picture="https://vignette.wikia.nocookie.net/overwatch/images/0/06/Ana_-_Twitter_Avatar.png/revision/latest?cb=20170828184148")
+session.add(User1)
+session.commit()
 
 
 # Menu for UrbanBurger
