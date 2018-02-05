@@ -28,7 +28,7 @@ CLIENT_ID = json.loads(open('client_secrets.json', 'r').read())['web']['client_i
 app = Flask(__name__)
 
 # Connect to Database and create database session
-engine = create_engine('sqlite:///restaurantmenu.db')
+engine = create_engine('sqlite:///restaurantmenuwithusers.db')
 Base.metadata.bind = engine
 
 DBSession = sessionmaker(bind=engine)
@@ -325,7 +325,7 @@ def newMenuItem(restaurant_id):
                            user_id=restaurant.user_id)
         session.add(newItem)
         session.commit()
-        flash('New Menu %s Item Successfully Created' + newItem.name)
+        flash("New Menu " + newItem.name + "Item Successfully Created")
         return redirect(url_for('showMenu', restaurant_id=restaurant_id))
     else:
         return render_template('newmenuitem.html', restaurant_id=restaurant_id)
