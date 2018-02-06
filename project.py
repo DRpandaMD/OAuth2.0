@@ -44,7 +44,97 @@ def show_login():
     return render_template('login.html', cfg=cfg, STATE=state)
 
 
-# LOG IN FUNCTION
+# FACEBOOK LOG IN FUNCTION
+# Here we will do the processing to authenticate with facebook
+@app.route('/fbconnect', methods=['POST'])
+def fbconnect():
+    # first check for the state tokens if they are not the same fail it back
+    if request.args.get('state') != login_session['state']:
+        response = make_response(json.dumps('Invalid state parameter.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    access_token = request.data.decode()
+    print("access token received ", access_token)
+
+    # now we loaded in our client secrets and send them to Facebook
+    app_id = json.loads(open('fb_client_secrets.json', 'r').read())['web']['app_id']
+    app_secret = json.loads(open('fb_client_secrets.json', 'r').read())['web']['app_secret']
+    # debugging
+    print(app_id)
+    print(app_secret)
+    url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=' + app_id + '&client' \
+        'secret=' + app_secret + '&fb_exchange_token=' + access_token
+    print(url)
+    http_handler = httplib2.Http()
+    result = json.loads((http_handler.request(url, 'GET')[1]).decode())
+
+    #debugging
+    print(result)
+    # now we use the token to get user info from the API
+    userinfo_url = "https://graph.facebook.com/v2.12/me"
+    '''
+            Due to the formatting for the result from the server token exchange we have to
+            split the token first on commas and select the first index which gives us the key : value
+            for the server access token then we split it on colons to pull out the actual token value
+            and replace the remaining quotes with nothing so that it can be used directly in the graph
+            api calls
+    '''
+    token = result.split(',')[0].split(':')[1].replace('"', '')
+    print("token is", token)
+
+    url = 'https://graph.facebook.com/v2.12/me?acess_token=' + token + '&fields=name,id,email'
+    result = json.loads((http_handler.request(url, 'GET')[1]).decode())
+    # for debugging print
+    print("url sent for API Access", url)
+    print("API JSON Result: ", result)
+
+    data = json.loads(result)
+    login_session['provider'] = 'faacebook'
+    login_session['username'] = data['name']
+    login_session['email'] = data['email']
+    login_session['facebook_id'] = data['id']
+
+    # while we are at it lets store the token (we also need to store it in order to log out ;) )
+    login_session['access_token'] = token
+
+    # we also want the users picture from facebook, that is from a separate call
+    url = 'https://graph.facebook.com/v2.12/me?access_token=' + token + '&redirect=0&height=200&width=200'
+    result = http_handler.request(url, 'GET')[1]
+    data =json.loads(result)
+    login_session['picture'] = data["data"]["url"]
+
+    # Now we have gathered all the pertinate user information lets see if they already exist before we add them
+    user_id = get_user_id(login_session['email'])
+    if not user_id:
+        user_id = create_user(login_session)
+    login_session['user_id'] = user_id
+
+    # get ready to splash user info on page
+    output = ''
+    output += '<h1>Welcome, '
+    output += login_session['username']
+    output += '!</h1>'
+    output += '<img src="'
+    output += login_session['picture']
+    output += ' " style = "width: 300px; height: 300px; border-radius: 150px; -webkit-border-radius: 150px; -moz-border-radius: 150px;">'
+
+    flash("Now logged in as: ", login_session['username'])
+    return output
+
+
+# Now we will make a disconnect function for facebook auth
+@app.route('/fbdisconnect')
+def fbdisconnect():
+    facebook_id = login_session['facebook_id']
+    access_token = login_session['access_token']
+    url = 'https://graph.facebook.com/' + facebook_id + '/permissions?access_token=' + access_token
+    http_handler = httplib2.Http()
+    result = http_handler.request(url, 'DELETE')[1]
+    return "You have bee logged out"
+
+
+# GOOGLE LOG IN FUNCTION
 # Here we will do all processing to authenticate with google
 @app.route('/gconnect', methods=['POST'])
 def gconnect():
