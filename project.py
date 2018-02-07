@@ -64,13 +64,17 @@ def fbconnect():
     print(app_id)
     print(app_secret)
     url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=' + app_id + '&client' \
-        'secret=' + app_secret + '&fb_exchange_token=' + access_token
+        '_secret=' + app_secret + '&fb_exchange_token=' + access_token
     print(url)
     http_handler = httplib2.Http()
     result = json.loads((http_handler.request(url, 'GET')[1]).decode())
 
     #debugging
     print(result)
+    if result.get('error') is not None:
+        response = make_response(json.dumps(result.get('error')), 500)
+        response.headers['Content-Type'] = 'application/json'
+        return response
     # now we use the token to get user info from the API
     userinfo_url = "https://graph.facebook.com/v2.12/me"
     '''
@@ -80,7 +84,7 @@ def fbconnect():
             and replace the remaining quotes with nothing so that it can be used directly in the graph
             api calls
     '''
-    token = result.split(',')[0].split(':')[1].replace('"', '')
+    token = result['access_token']
     print("token is", token)
 
     url = 'https://graph.facebook.com/v2.12/me?acess_token=' + token + '&fields=name,id,email'
