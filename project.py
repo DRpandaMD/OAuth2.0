@@ -38,7 +38,7 @@ session = DBSession()
 # Create a state token to prevent request forgery.
 # We will store in the session for later validation
 @app.route('/login')
-def show_login():
+def showLogin():
     state = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(32))
     login_session['state'] = state
     return render_template('login.html', cfg=cfg, STATE=state)
@@ -55,22 +55,15 @@ def fbconnect():
         return response
 
     access_token = request.data.decode()
-    print("access token received ", access_token)
-
     # now we loaded in our client secrets and send them to Facebook
     app_id = json.loads(open('fb_client_secrets.json', 'r').read())['web']['app_id']
     app_secret = json.loads(open('fb_client_secrets.json', 'r').read())['web']['app_secret']
-    # debugging
-    print(app_id)
-    print(app_secret)
     url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=' + app_id + '&client' \
         '_secret=' + app_secret + '&fb_exchange_token=' + access_token
     print(url)
     http_handler = httplib2.Http()
     result = json.loads((http_handler.request(url, 'GET')[1]).decode())
 
-    #debugging
-    print(result)
     if result.get('error') is not None:
         response = make_response(json.dumps(result.get('error')), 500)
         response.headers['Content-Type'] = 'application/json'
@@ -85,16 +78,14 @@ def fbconnect():
             api calls
     '''
     token = result['access_token']
-    print("token is", token)
 
-    url = 'https://graph.facebook.com/v2.12/me?acess_token=' + token + '&fields=name,id,email'
-    result = json.loads((http_handler.request(url, 'GET')[1]).decode())
+    url = 'https://graph.facebook.com/v2.12/me?access_token=' + token + '&fields=name,id,email'
+    result = http_handler.request(url, 'GET')[1]
     # for debugging print
     print("url sent for API Access", url)
-    print("API JSON Result: ", result)
 
     data = json.loads(result)
-    login_session['provider'] = 'faacebook'
+    login_session['provider'] = 'facebook'
     login_session['username'] = data['name']
     login_session['email'] = data['email']
     login_session['facebook_id'] = data['id']
@@ -103,9 +94,10 @@ def fbconnect():
     login_session['access_token'] = token
 
     # we also want the users picture from facebook, that is from a separate call
-    url = 'https://graph.facebook.com/v2.12/me?access_token=' + token + '&redirect=0&height=200&width=200'
-    result = http_handler.request(url, 'GET')[1]
-    data =json.loads(result)
+    url2 = 'https://graph.facebook.com/v2.12/' + login_session['facebook_id'] + '/picture?redirect=false&access_token='+ login_session['access_token']
+    print(url2)
+    result = http_handler.request(url2, 'GET')[1]
+    data = json.loads(result)
     login_session['picture'] = data["data"]["url"]
 
     # Now we have gathered all the pertinate user information lets see if they already exist before we add them
@@ -123,7 +115,7 @@ def fbconnect():
     output += login_session['picture']
     output += ' " style = "width: 300px; height: 300px; border-radius: 150px; -webkit-border-radius: 150px; -moz-border-radius: 150px;">'
 
-    flash("Now logged in as: ", login_session['username'])
+    flash("Now logged in as " + login_session['username'])
     return output
 
 
@@ -135,6 +127,7 @@ def fbdisconnect():
     url = 'https://graph.facebook.com/' + facebook_id + '/permissions?access_token=' + access_token
     http_handler = httplib2.Http()
     result = http_handler.request(url, 'DELETE')[1]
+    print(result)
     return "You have bee logged out"
 
 
@@ -199,6 +192,7 @@ def gconnect():
         return response
 
     # Lets store these for later use
+    login_session['provider'] = 'google'
     login_session['access_token'] = credentials.access_token
     login_session['google_id'] = google_id
 
@@ -330,7 +324,7 @@ def restaurantsJSON():
 def showRestaurants():
     restaurants = session.query(Restaurant).order_by(asc(Restaurant.name))
     if 'username' not in login_session:
-        return render_template('publicrestaurants.html',restaurants=restaurants)
+        return render_template('publicrestaurants.html', restaurants=restaurants)
     else:
         return render_template('restaurants.html', restaurants=restaurants)
 
@@ -471,6 +465,28 @@ def deleteMenuItem(restaurant_id, menu_id):
         return redirect(url_for('showMenu', restaurant_id=restaurant_id))
     else:
         return render_template('deleteMenuItem.html', item=itemToDelete)
+
+
+# Create a Generic Disconnect function to scale for more than one OAuth Provider
+@app.route('/disconnect')
+def disconnect():
+    if 'provider' in login_session:
+        if login_session['provider'] == 'google':
+            gdisconnect()
+            # del login_session['google_id']
+            # del login_session['access_token']
+        if login_session['provider'] == 'facebook':
+            del login_session['facebook_id']
+        del login_session['username']
+        del login_session['email']
+        del login_session['picture']
+        del login_session['user_id']
+        del login_session['provider']
+        flash("You have been successfully logged out!")
+        return redirect(url_for('showRestaurants'))
+    else:
+        flash("You were not logged in!!")
+        return redirect(url_for('showRestaurants'))
 
 
 if __name__ == '__main__':
